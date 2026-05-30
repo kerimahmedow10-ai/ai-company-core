@@ -1,8 +1,10 @@
-from fastapi import FastAPI, Request
+ from fastapi import FastAPI, Request
 import httpx
 
 TELEGRAM_TOKEN = "8727691504:AAHPhlzNi2qcNyVMe7pOaX0cuFGBRDUomm0"
-app = FastAPI(title="AI_Digital_Corp_Core", version="7.0.0")
+GROQ_API_KEY = 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
+
+app = FastAPI(title="AI_Digital_Corp_Core", version="8.0.0")
 BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 async def send_telegram_message(chat_id: int, text: str):
@@ -16,28 +18,35 @@ async def send_telegram_message(chat_id: int, text: str):
             print(f"Ошибка Telegram: {e}")
 
 async def ask_free_ai(prompt: str) -> str:
-    """Ультра-стабильный ИИ-движок без токенов и ограничений"""
-    # Используем стабильный открытый шлюз интеграции ИИ
-    url = "https://open-ai-api-production.up.railway.app/v1/chat/completions"
+    """Официальный, профессиональный и ультра-быстрый ИИ-движок Groq Cloud"""
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
     payload = {
-        "model": "gpt-3.5-turbo",
+        "model": "llama3-8b-8192",  # Мощная и молниеносная модель LLaMA 3
         "messages": [
-            {"role": "system", "content": "Ты — ведущий бизнес-консультант и ИИ-аналитик корпорации AI Digital Corp. Отвечай четко, профессионально и только на русском языке."},
+            {
+                "role": "system", 
+                "content": "Ты — ведущий ИИ-консультант компании AI Digital Corp. Отвечай только на русском языке, развернуто, структурировано и профессионально, используя списки и маркеры."
+            },
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7
     }
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(headers=headers) as client:
         try:
-            response = await client.post(url, json=payload, timeout=25.0)
+            response = await client.post(url, json=payload, timeout=20.0)
             if response.status_code == 200:
                 res_data = response.json()
                 return res_data["choices"][0]["message"]["content"].strip()
-            return "ИИ-модуль калибруется. Пожалуйста, повторите запрос через минуту."
+            print(f"Ошибка Groq API: {response.status_code} - {response.text}")
+            return "ИИ-ядро зафиксировало внутренний лимит. Пожалуйста, повторите запрос через минуту."
         except Exception as e:
-            print(f"Ошибка ИИ: {e}")
-            return "Не удалось получить ответ от ИИ-ядра. Попробуйте еще раз."
+            print(f"Исключение при запросе к ИИ: {e}")
+            return "Не удалось установить защищенное соединение с ИИ-сервером корпорации."
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
@@ -53,7 +62,7 @@ async def telegram_webhook(request: Request):
                 f"Приветствуем, *{user_name}*! 🚀\n"
                 f"Вы внутри экосистемы **AI Digital Corp**.\n\n"
                 f"📊 Нажмите /analytics — для технического анализа рынка.\n"
-                f"🤖 Напишите любой бизнес-вопрос, и наше AI-ядро мгновенно выдаст вам решение!"
+                f"🤖 Напишите любой бизнес-вопрос, и наше официальное AI-ядро мгновенно выдаст вам решение!"
             )
             await send_telegram_message(chat_id, reply)
         
@@ -68,7 +77,7 @@ async def telegram_webhook(request: Request):
             await send_telegram_message(chat_id, reply)
         
         else:
-            await send_telegram_message(chat_id, "🤖 _Запрос обрабатывается AI-ядром корпорации... Секунду..._")
+            await send_telegram_message(chat_id, "🤖 _Запрос обрабатывается официальным ИИ-ядром... Секунду..._")
             ai_response = await ask_free_ai(user_text)
             reply = f"🧠 *Ответ AI-Ассистента Digital Corp:*\n\n{ai_response}"
             await send_telegram_message(chat_id, reply)
