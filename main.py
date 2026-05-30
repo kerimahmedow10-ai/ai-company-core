@@ -1,39 +1,46 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import uvicorn
+from fastapi import FastAPI, Request
+import httpx
 import asyncio
 
-app = FastAPI(title="AI_Digital_Corp_Core", version="1.0.0")
+app = FastAPI(title="AI_Digital_Corp_Core", version="2.0.0")
 
-class UserMessage(BaseModel):
-    user_id: str
-    message: str
-    client_token: str
+# Данные нашей компании (зашиваем ваш токен безопасности)
+TELEGRAM_TOKEN = "8727691504:AAHPhlzNi2qcNyVMe7pOaX0cuFGBRDUomm0"
+BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-VALID_TOKENS = {"premium_token_123", "valleys_finest_777"}
+async def send_telegram_message(chat_id: int, text: str):
+    """Асинхронная отправка ответа пользователю в Telegram"""
+    url = f"{BASE_URL}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text}
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(url, json=payload)
+        except Exception as e:
+            print(f"Ошибка отправки сообщения: {e}")
 
-async def generate_ai_response(text: str) -> str:
-    await asyncio.sleep(0.5)
-    return f"[AI СЕО]: Обработал ваш запрос: '{text}'. Ответ сформирован успешно."
-
-@app.post("/v1/chat")
-async def process_chat(payload: UserMessage):
-    if payload.client_token not in VALID_TOKENS:
-        raise HTTPException(status_code=403, detail="Доступ отклонен. Обновите подписку.")
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    """Слушатель сообщений от нашего Telegram-бота"""
+    data = await request.json()
     
-    try:
-        ai_reply = await generate_ai_response(payload.message)
-        return {
-            "status": "success",
-            "user_id": payload.user_id,
-            "reply": ai_reply
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка сервера: {str(e)}")
+    # Проверяем, что пришло именно текстовое сообщение
+    if "message" in data and "text" in data["message"]:
+        chat_id = data["message"]["chat"]["id"]
+        user_text = data["message"]["text"]
+        user_name = data["message"]["from"].get("first_name", "Клиент")
+
+        # Приветственное сообщение
+        if user_text.startswith("/start"):
+            reply = f"Приветствуем вас, {user_name}! 🚀\nВы обратились в AI Digital Corp. Я — ваш персональный AI-ассистент.\n\nЗадайте мне любой вопрос по автоматизации бизнеса, разработке или трейдингу, и я мгновенно сформирую решение!"
+        else:
+            # Имитация работы мощного AI-интеллекта компании
+            reply = f"[AI СЕО] Специально для вас, {user_name}:\nЯ проанализировал ваш запрос '{user_text}'. Система автоматизации подготавливает персональное решение. Наша платформа работает на 100%!"
+
+        # Отправляем ответ в чат
+        await send_telegram_message(chat_id, reply)
+        
+    return {"status": "ok"}
 
 @app.get("/health")
 async def health_check():
     return {"status": "running", "infrastructure": "stable"}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
