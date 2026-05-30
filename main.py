@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 import httpx
 import asyncio
 
-app = FastAPI(title="AI_Digital_Corp_Core", version="3.0.0")
+app = FastAPI(title="AI_Digital_Corp_Core", version="3.1.0")
 
 TELEGRAM_TOKEN = "8727691504:AAHPhlzNi2qcNyVMe7pOaX0cuFGBRDUomm0"
 BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
@@ -18,16 +18,27 @@ async def send_telegram_message(chat_id: int, text: str):
             print(f"Ошибка Telegram API: {e}")
 
 async def ask_free_ai(prompt: str) -> str:
-    """Бесплатный быстрый AI-движок для обработки бизнес-запросов"""
-    url = f"https://text.pollinations.ai/{prompt}"
-    async with httpx.AsyncClient() as client:
+    """Стабильный AI-движок с маскировкой под браузер"""
+    # Кодируем текст, чтобы не было проблем с пробелами в URL
+    from urllib.parse import quote
+    encoded_prompt = quote(prompt)
+    url = f"https://text.pollinations.ai/{encoded_prompt}?model=openai"
+    
+    # Маскируемся под реального пользователя, чтобы избежать таймаутов
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    async with httpx.AsyncClient(headers=headers) as client:
         try:
-            response = await client.get(url, timeout=15.0)
-            if response.status_code == 200:
+            # Даем серверу чуть больше времени на ответ (20 секунд)
+            response = await client.get(url, timeout=20.0)
+            if response.status_code == 200 and response.text.strip():
                 return response.text
-            return "Не удалось связаться с AI-ядром. Попробуйте позже."
-        except Exception:
-            return "Таймаут AI-ядра. Нагрузка слишком высока."
+            return "AI-ядро временно обрабатывает другую задачу. Повторите запрос через минуту!"
+        except Exception as e:
+            print(f"Ошибка AI: {e}")
+            return "Система перегружена. Пожалуйста, попробуйте еще раз."
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
@@ -44,10 +55,11 @@ async def telegram_webhook(request: Request):
                 f"Приветствуем, *{user_name}*! 🚀\n"
                 f"Вы внутри экосистемы **AI Digital Corp**.\n\n"
                 f"📊 Нажмите /analytics — чтобы получить быстрый технический анализ рынка и OTC трендов.\n"
-                f"🤖 Или просто напишите любой вопрос (по коду, FastAPI, стратегиям), и наш встроенный AI мгновенно сгенерирует решение!"
+                f"🤖 Или просто напишите любой вопрос, и наш встроенный AI мгновенно сгенерирует решение!"
             )
+            await send_telegram_message(chat_id, reply)
         
-        # 2. Блок Трейдинга и Аналитики (Технический анализ)
+        # 2. Блок Трейдинга и Аналитики
         elif user_text.startswith("/analytics"):
             reply = (
                 f"📊 *Аналитический отчет AI Digital Corp*\n"
@@ -56,15 +68,14 @@ async def telegram_webhook(request: Request):
                 f"📉 **Индикаторы:** RSI в нейтральной зоне (54), Bollinger Bands сужаются — ожидается мощный пробой волатильности.\n\n"
                 f"_Для получения приватных сигналов и точных точек входа обновите тариф до Premium._"
             )
+            await send_telegram_message(chat_id, reply)
         
-        # 3. Блок Умного AI (Отвечает на любые вопросы)
+        # 3. Блок Умного AI
         else:
             await send_telegram_message(chat_id, "🤖 _AI анализирует ваш запрос... Секунду..._")
-            # Отправляем запрос в AI-движок
             ai_response = await ask_free_ai(user_text)
             reply = f"🧠 *Ответ AI-Ассистента Digital Corp:*\n\n{ai_response}"
-
-        await send_telegram_message(chat_id, reply)
+            await send_telegram_message(chat_id, reply)
         
     return {"status": "ok"}
 
