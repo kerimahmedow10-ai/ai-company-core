@@ -1,31 +1,35 @@
- from fastapi import FastAPI, Request
-import httpx
+import json
+import urllib.request
+import urllib.error
+from fastapi import FastAPI, Request
 
 TELEGRAM_TOKEN = "8727691504:AAHPhlzNi2qcNyVMe7pOaX0cuFGBRDUomm0"
-GROQ_API_KEY = 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
+GROQ_API_KEY = "Gsk_9bvTObVDLi4Y11CtwaXyWGdyb3FYg4OzsOPjZInYsa3CgafS5Jha"
 
-app = FastAPI(title="AI_Digital_Corp_Core", version="8.0.0")
-BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+app = FastAPI(title="AI_Digital_Corp_Core", version="9.0.0")
 
-async def send_telegram_message(chat_id: int, text: str):
-    """Асинхронная отправка сообщений в Telegram"""
-    url = f"{BASE_URL}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
-    async with httpx.AsyncClient() as client:
-        try:
-            await client.post(url, json=payload, timeout=10.0)
-        except Exception as e:
-            print(f"Ошибка Telegram: {e}")
+def send_telegram_message(chat_id: int, text: str):
+    """Отправка сообщений в Telegram через встроенный urllib"""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            response.read()
+    except Exception as e:
+        print(f"Ошибка Telegram: {e}")
 
-async def ask_free_ai(prompt: str) -> str:
-    """Официальный, профессиональный и ультра-быстрый ИИ-движок Groq Cloud"""
+def ask_free_ai(prompt: str) -> str:
+    """Запрос к Groq API через встроенный urllib"""
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
-    payload = {
-        "model": "llama3-8b-8192",  # Мощная и молниеносная модель LLaMA 3
+    payload = json.dumps({
+        "model": "llama3-8b-8192",
         "messages": [
             {
                 "role": "system", 
@@ -34,23 +38,26 @@ async def ask_free_ai(prompt: str) -> str:
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7
-    }
+    }).encode("utf-8")
     
-    async with httpx.AsyncClient(headers=headers) as client:
-        try:
-            response = await client.post(url, json=payload, timeout=20.0)
-            if response.status_code == 200:
-                res_data = response.json()
-                return res_data["choices"][0]["message"]["content"].strip()
-            print(f"Ошибка Groq API: {response.status_code} - {response.text}")
-            return "ИИ-ядро зафиксировало внутренний лимит. Пожалуйста, повторите запрос через минуту."
-        except Exception as e:
-            print(f"Исключение при запросе к ИИ: {e}")
-            return "Не удалось установить защищенное соединение с ИИ-сервером корпорации."
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            return res_data["choices"][0]["message"]["content"].strip()
+    except urllib.error.HTTPError as e:
+        print(f"Groq HTTP Error: {e.code} - {e.read().decode('utf-8', errors='ignore')}")
+        return "ИИ-ядро перегружено. Пожалуйста, повторите запрос через минуту."
+    except Exception as e:
+        print(f"Ошибка ИИ: {e}")
+        return "Не удалось установить защищенное соединение с ИИ-сервером корпорации."
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
-    data = await request.json()
+    try:
+        data = await request.json()
+    except Exception:
+        return {"status": "bad json"}
     
     if "message" in data and "text" in data["message"]:
         chat_id = data["message"]["chat"]["id"]
@@ -64,7 +71,7 @@ async def telegram_webhook(request: Request):
                 f"📊 Нажмите /analytics — для технического анализа рынка.\n"
                 f"🤖 Напишите любой бизнес-вопрос, и наше официальное AI-ядро мгновенно выдаст вам решение!"
             )
-            await send_telegram_message(chat_id, reply)
+            send_telegram_message(chat_id, reply)
         
         elif user_text.startswith("/analytics"):
             reply = (
@@ -74,13 +81,13 @@ async def telegram_webhook(request: Request):
                 f"📉 **Индикаторы:** RSI в нейтральной зоне (54), Bollinger Bands сужаются.\n\n"
                 f"_Для получения приватных сигналов обновите тариф до Premium._"
             )
-            await send_telegram_message(chat_id, reply)
+            send_telegram_message(chat_id, reply)
         
         else:
-            await send_telegram_message(chat_id, "🤖 _Запрос обрабатывается официальным ИИ-ядром... Секунду..._")
-            ai_response = await ask_free_ai(user_text)
+            send_telegram_message(chat_id, "🤖 _Запрос обрабатывается официальным ИИ-ядром... Секунду..._")
+            ai_response = ask_free_ai(user_text)
             reply = f"🧠 *Ответ AI-Ассистента Digital Corp:*\n\n{ai_response}"
-            await send_telegram_message(chat_id, reply)
+            send_telegram_message(chat_id, reply)
         
     return {"status": "ok"}
 
